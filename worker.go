@@ -4,6 +4,8 @@ import (
 	zmq "github.com/innotech/hydra/vendors/github.com/alecthomas/gozmq"
 	"log"
 	"time"
+	// DEBUG
+	"fmt"
 )
 
 const (
@@ -116,26 +118,27 @@ func (self *lbWorker) Recv(reply [][]byte) (msg [][]byte) {
 
 		log.Printf("RECV %d", len(items))
 		log.Printf("RECV items[0] %d", items[0])
-		log.Printf("RECV POLLIN %d", items[0].REvents&zmq.POLLIN )
+		log.Printf("RECV POLLIN %d", items[0].REvents&zmq.POLLIN)
 
 		if item := items[0]; item.REvents&zmq.POLLIN != 0 {
-		
+
 			log.Printf("RECV2 %d", len(items))
-			
+
 			msg, _ = self.worker.RecvMultipart(0)
-			
+
 			log.Printf("RECV3 %d", len(msg))
-			
+
 			if self.verbose {
 				log.Println("Received message from broker: ")
 				//Dump(msg)
 			}
 			self.liveness = HEARTBEAT_LIVENESS
-			if len(msg) < 3 {
+			Dump(msg)
+			if len(msg) < 2 {
 				panic("Invalid msg") //  Interrupted
 			}
 
-			switch command := string(msg[2]); command {
+			switch command := string(msg[1]); command {
 			case SIGNAL_REQUEST:
 				log.Printf("Signal REQUEST received")
 				//  We should pop and save as many addresses as there are
@@ -147,7 +150,7 @@ func (self *lbWorker) Recv(reply [][]byte) (msg [][]byte) {
 				log.Printf("Signal HEARBEAT received")
 				// do nothin
 			case SIGNAL_DISCONNECT:
-			log.Printf("Signal DISCONNECT received")
+				log.Printf("Signal DISCONNECT received")
 				self.reconnectToBroker()
 			default:
 				log.Println("Invalid input message:")
@@ -169,4 +172,23 @@ func (self *lbWorker) Recv(reply [][]byte) (msg [][]byte) {
 	}
 
 	return
+}
+
+// DEBUG
+func Dump(msg [][]byte) {
+	for _, part := range msg {
+		isText := true
+		fmt.Printf("[%03d] ", len(part))
+		for _, char := range part {
+			if char < 32 || char > 127 {
+				isText = false
+				break
+			}
+		}
+		if isText {
+			fmt.Printf("%s\n", part)
+		} else {
+			fmt.Printf("%X\n", part)
+		}
+	}
 }
