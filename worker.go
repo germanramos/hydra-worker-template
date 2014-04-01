@@ -1,8 +1,7 @@
-package worker
+package main
 
 import (
 	zmq "github.com/innotech/hydra/vendors/github.com/alecthomas/gozmq"
-	uuid "github.com/innotech/hydra/vendors/github.com/nu7hatch/gouuid"
 	"log"
 	"time"
 )
@@ -19,7 +18,7 @@ const (
 
 type Worker interface {
 	Close()
-	Recv([][]byte) [][]bytess
+	Recv([][]byte) [][]byte
 }
 
 type lbWorker struct {
@@ -74,10 +73,10 @@ func (self *lbWorker) sendToBroker(command string, option []byte, msg [][]byte) 
 		msg = append([][]byte{option}, msg...)
 	}
 
-	msg = append([][]byte{nil, []byte(SIGNAL_WORKER), []byte(command)}, msg...)
+	msg = append([][]byte{nil, []byte(command)}, msg...)
 	if self.verbose {
 		log.Printf("Sending %X to broker\n", command)
-		Dump(msg)
+		//Dump(msg)
 	}
 	self.worker.SendMultipart(msg, 0)
 }
@@ -91,7 +90,6 @@ func (self *lbWorker) Close() {
 
 func (self *lbWorker) Recv(reply [][]byte) (msg [][]byte) {
 	//  Format and send the reply if we were provided one
-
 	if len(reply) == 0 && self.expectReply {
 		panic("Error reply")
 	}
@@ -101,7 +99,7 @@ func (self *lbWorker) Recv(reply [][]byte) (msg [][]byte) {
 			panic("Error replyTo")
 		}
 		reply = append([][]byte{self.replyTo, nil}, reply...)
-		self.sendToBroker(MDPW_REPLY, nil, reply)
+		self.sendToBroker(SIGNAL_REPLY, nil, reply)
 	}
 
 	self.expectReply = true
@@ -116,36 +114,44 @@ func (self *lbWorker) Recv(reply [][]byte) (msg [][]byte) {
 			panic(err) //  Interrupted
 		}
 
+		log.Printf("RECV %d", len(items))
+		log.Printf("RECV items[0] %d", items[0])
+		log.Printf("RECV POLLIN %d", items[0].REvents&zmq.POLLIN )
+
 		if item := items[0]; item.REvents&zmq.POLLIN != 0 {
+		
+			log.Printf("RECV2 %d", len(items))
+			
 			msg, _ = self.worker.RecvMultipart(0)
+			
+			log.Printf("RECV3 %d", len(msg))
+			
 			if self.verbose {
 				log.Println("Received message from broker: ")
-				Dump(msg)
+				//Dump(msg)
 			}
 			self.liveness = HEARTBEAT_LIVENESS
 			if len(msg) < 3 {
 				panic("Invalid msg") //  Interrupted
 			}
 
-			header := msg[1]
-			if string(header) != SIGNAL_WORKER {
-				panic("Invalid header") //  Interrupted
-			}
-
 			switch command := string(msg[2]); command {
 			case SIGNAL_REQUEST:
+				log.Printf("Signal REQUEST received")
 				//  We should pop and save as many addresses as there are
 				//  up to a null part, but for now, just save one...
 				self.replyTo = msg[3]
 				msg = msg[5:]
 				return
 			case SIGNAL_HEARTBEAT:
+				log.Printf("Signal HEARBEAT received")
 				// do nothin
 			case SIGNAL_DISCONNECT:
+			log.Printf("Signal DISCONNECT received")
 				self.reconnectToBroker()
 			default:
 				log.Println("Invalid input message:")
-				Dump(msg)
+				//Dump(msg)
 			}
 		} else if self.liveness--; self.liveness <= 0 {
 			if self.verbose {
