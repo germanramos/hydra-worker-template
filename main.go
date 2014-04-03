@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"log"
 )
 
 func main() {
@@ -16,11 +17,14 @@ func main() {
 	worker := NewWorker(serverAddr, serviceName, verbose)
 
 	for reply := [][]byte{}; ; {
+		log.Print("***********************Enter FOR")
 		request := worker.Recv(reply)
+		log.Print("*********************After recv")
 		if len(request) == 0 {
 			break
 		}
 		// You should code your logic here
+		log.Print("********************REPLY=REQUEST")
 		reply = request
 	}
 }
